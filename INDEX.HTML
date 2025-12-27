@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DIAMOND_OS | AUTHORITY_V10</title>
+    
+    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@500;600;700;800&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+    <style>
+        :root {
+            /* Default: HACKER GREEN */
+            --primary: #00ff41;
+            --secondary: #008F11; 
+            --danger: #ff0000;
+            --warning: #f2ff00;
+            --bg-deep: #050505;
+            --glass: rgba(5, 10, 5, 0.95);
+            --border: 1px solid rgba(0, 255, 65, 0.3);
+            --font-head: 'Rajdhani', sans-serif;
+            --font-mono: 'Share Tech Mono', monospace;
+            --font-paper: 'Courier Prime', monospace; /* For Report Card */
+        }
+
+        /* --- BASE --- */
+        body {
+            background-color: var(--bg-deep); color: #fff;
+            font-family: var(--font-head); height: 100vh; overflow: hidden; margin: 0;
+        }
+        #bg-canvas { position: absolute; top:0; left:0; width:100%; height:100%; z-index: -1; opacity: 0.2; }
+
+        * { box-sizing: border-box; user-select: none; outline: none; }
+        ::-webkit-scrollbar { width: 4px; }
+        ::-webkit-scrollbar-thumb { background: var(--primary); }
+
+        /* --- LAYOUT --- */
+        #interface {
+            display: grid; grid-template-columns: 320px 1fr 350px; grid-template-rows: 60px 1fr 35px;
+            gap: 8px; padding: 8px; height: 100vh; width: 100vw;
+            filter: blur(10px); transition: 0.5s; pointer-events: none;
+        }
+        #interface.active { filter: blur(0); pointer-events: all; }
+
+        .panel {
+            background: var(--glass); border: var(--border);
+            border-radius: 2px; display: flex; flex-direction: column;
+            box-shadow: 0 0 10px rgba(0,0,0,0.8);
+            position: relative; overflow: hidden; backdrop-filter: blur(5px);
+        }
+        .p-head {
+            background: rgba(255, 255, 255, 0.05); padding: 8px 12px;
+            font-family: var(--font-mono); font-size: 0.8rem;
+            border-bottom: var(--border); display: flex; justify-content: space-between;
+            color: var(--primary); letter-spacing: 2px;
+        }
+        .p-body { flex: 1; overflow-y: auto; padding: 15px; }
+
+        /* --- INPUTS --- */
+        .cyber-input, select {
+            background: rgba(0,0,0,0.8); border: 1px solid #333; color: #fff;
+            padding: 8px; font-family: var(--font-mono); width: 100%;
+            margin-bottom: 8px; border-radius: 0px; transition: 0.3s;
+        }
+        .cyber-input:focus { border-color: var(--primary); background: rgba(0, 50, 0, 0.5); }
+        
+        .btn-cyber {
+            background: rgba(255, 255, 255, 0.05); border: 1px solid var(--primary);
+            color: var(--primary); padding: 10px; width: 100%; cursor: pointer;
+            font-family: var(--font-mono); font-weight: bold; transition: 0.2s;
+            text-transform: uppercase; letter-spacing: 2px;
+        }
+        .btn-cyber:hover { background: var(--primary); color: #000; box-shadow: 0 0 15px var(--primary); }
+        .btn-cyber:disabled { border-color: #333; color: #555; background: transparent; cursor: not-allowed; box-shadow: none; }
+        .btn-small { padding: 4px 8px; font-size: 0.7rem; width: auto; display: inline-block; }
+        
+        .settings-select { background: #000; color: var(--primary); border: 1px solid var(--primary); font-family: var(--font-mono); font-size: 0.7rem; }
+
+        /* --- OVERLAYS --- */
+        .overlay { position: fixed; inset: 0; background: #000; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .login-box { border: 2px solid var(--primary); padding: 40px; width: 350px; text-align: center; box-shadow: 0 0 50px rgba(0, 255, 0, 0.1); background: #050505; }
+        
+        /* --- REPORT CARD (REAL EXAM STYLE) --- */
+        .report-card {
+            background: #fdfbf7; color: #1a1a1a; width: 500px; max-width: 95%;
+            padding: 40px; border: 4px double #1a1a1a; 
+            font-family: var(--font-paper); position: relative;
+            box-shadow: 0 0 50px rgba(255,255,255,0.2);
+            text-align: left;
+        }
+        .rc-header { text-align: center; border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+        .rc-title { font-size: 1.8rem; font-weight: bold; letter-spacing: 1px; margin: 0; }
+        .rc-sub { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 2px; }
+        .rc-row { display: flex; justify-content: space-between; border-bottom: 1px dotted #999; margin-bottom: 8px; padding-bottom: 2px; }
+        .rc-label { font-weight: bold; font-size: 0.9rem; }
+        .rc-val { font-family: 'Courier New', monospace; font-weight: bold; }
+        
+        .rc-score-box { 
+            border: 2px solid #000; margin-top: 20px; padding: 15px; 
+            display: flex; justify-content: space-between; align-items: center; 
+        }
+        .rc-grade { font-size: 3rem; font-weight: bold; line-height: 1; }
+        
+        .rc-footer { margin-top: 30px; display: flex; justify-content: space-between; align-items: end; }
+        .rc-sign { border-top: 1px solid #000; padding-top: 5px; width: 150px; text-align: center; font-size: 0.7rem; }
+        
+        .stamp {
+            position: absolute; top: 150px; right: 40px;
+            border: 4px solid; padding: 5px 15px;
+            font-family: 'Black Ops One', sans-serif; font-weight: 900; font-size: 2.5rem;
+            transform: rotate(-15deg); opacity: 0; animation: stampAnim 0.3s forwards 0.5s;
+            text-transform: uppercase; mix-blend-mode: multiply;
+        }
+        @keyframes stampAnim { 0% { transform: scale(3) rotate(-15deg); opacity:0; } 100% { transform: scale(1) rotate(-15deg); opacity:0.7; } }
+        
+        /* RADAR */
+        #radar-box { width: 100%; height: 180px; position: relative; margin-bottom: 15px; border: 1px solid var(--border); border-radius: 50%; overflow: hidden; background: #000; }
+        .radar-sweep { position: absolute; inset: 0; background: conic-gradient(from 0deg, transparent 0deg, var(--primary) 60deg, transparent 60deg); opacity: 0.3; border-radius: 50%; animation: spin 2s linear infinite; }
+        .radar-grid { position: absolute; inset: 0; background-image: radial-gradient(circle, transparent 30%, var(--primary) 31%, transparent 32%), radial-gradient(circle, transparent 60%, var(--primary) 61%, transparent 62%); opacity: 0.2; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* TAB & CHECKLIST */
+        .check-group { background: rgba(255,255,255,0.02); padding: 10px; border: 1px solid #333; margin-bottom: 10px; max-height: 150px; overflow-y: auto; }
+        .chk-item { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; color: #888; cursor: pointer; margin-bottom: 5px; }
+        .chk-item:hover { color: var(--primary); }
+        .rule-list-item { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 5px 10px; margin-bottom: 5px; font-family: var(--font-mono); font-size: 0.8rem; }
+
+        @media (max-width: 768px) {
+            #interface { display: flex; flex-direction: column; overflow-y: auto; height: auto; min-height: 100vh; }
+            .panel { min-height: 300px; margin-bottom: 10px; }
+            #tv-chart { height: 350px; }
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="bg-canvas"></canvas>
+
+    <div id="login-overlay" class="overlay">
+        <div class="login-box">
+            <h1 style="font-size: 3rem; margin: 0; color: #fff; letter-spacing: 5px; text-shadow: 0 0 20px var(--primary);">DIAMOND</h1>
+            <p style="color: var(--primary); font-family: var(--font-mono); margin-bottom: 30px;">AUTHORITY TERMINAL</p>
+            <input type="password" id="login-pin" class="cyber-input" placeholder="PIN (RADHAKRISHNA)" style="text-align: center; font-size: 1.5rem; letter-spacing: 5px;" maxlength="4">
+            <button class="btn-cyber" onclick="attemptLogin()">ACCESS SYSTEM</button>
+            <p id="login-msg" style="color: var(--danger); height: 20px; font-size: 0.8rem; margin-top: 10px;"></p>
+        </div>
+    </div>
+
+    <div id="setup-overlay" class="overlay" style="display: none; background: rgba(0,0,0,0.95);">
+        <div class="login-box" style="border-color: var(--warning); box-shadow: none;">
+            <h2 style="color: var(--warning);">DAILY PROTOCOL</h2>
+            <div style="text-align: left; margin-bottom: 20px;">
+                <label style="font-size:0.7rem; color:var(--primary);">CAPITAL</label>
+                <input type="number" id="set-cap" class="cyber-input" value="50000">
+                <label style="font-size:0.7rem; color:var(--danger);">MAX DAILY LOSS</label>
+                <input type="number" id="set-risk" class="cyber-input" value="1000">
+                <label style="font-size:0.7rem; color:var(--secondary);">MAX TRADES</label>
+                <input type="number" id="set-trades" class="cyber-input" value="3">
+            </div>
+            <button class="btn-cyber" onclick="confirmSetup()">INITIALIZE</button>
+        </div>
+    </div>
+
+    <div id="rule-editor-overlay" class="overlay" style="display: none; background: rgba(0,0,0,0.95);">
+        <div class="login-box" style="width: 600px; max-width: 95%; text-align: left; border-color: var(--secondary);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="color: var(--secondary); margin:0;">RULE ARCHITECT</h2>
+                <button onclick="closeRuleEditor()" style="background:transparent; border:none; color:#666; cursor:pointer;">[CLOSE]</button>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <h3 style="color: var(--primary); font-size: 0.8rem; border-bottom: 1px solid var(--primary); margin-bottom: 10px;">ENTRY RULES</h3>
+                    <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                        <input type="text" id="new-entry-rule" class="cyber-input" placeholder="New Rule" style="margin:0;">
+                        <button class="btn-cyber btn-small" onclick="addNewRule('entry')">+</button>
+                    </div>
+                    <div id="entry-rule-list" style="height: 200px; overflow-y: auto;"></div>
+                </div>
+                <div>
+                    <h3 style="color: var(--warning); font-size: 0.8rem; border-bottom: 1px solid var(--warning); margin-bottom: 10px;">EXIT RULES</h3>
+                    <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                        <input type="text" id="new-exit-rule" class="cyber-input" placeholder="New Rule" style="margin:0;">
+                        <button class="btn-cyber btn-small" onclick="addNewRule('exit')">+</button>
+                    </div>
+                    <div id="exit-rule-list" style="height: 200px; overflow-y: auto;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="lockdown-overlay" class="overlay" style="display: none;">
+        <div class="login-box" style="border: 2px solid var(--danger);">
+            <h1 style="color: var(--danger); font-size: 4rem;">LOCKED</h1>
+            <p style="color: #fff;">PROTOCOL VIOLATION</p>
+            <div id="lock-reason" style="margin: 20px 0; color: var(--warning); border: 1px solid var(--warning); padding: 10px;">REASON: UNKNOWN</div>
+            <p style="color: #888; font-size: 0.8rem;">SYSTEM AUTO-RESETS AT MIDNIGHT (00:00).</p>
+        </div>
+    </div>
+
+    <div id="result-overlay" class="overlay" style="display: none;">
+        <div class="report-card">
+            <div class="rc-header">
+                <div class="rc-title">OFFICIAL TRADE REPORT</div>
+                <div class="rc-sub">DIAMOND TRADING ACADEMY</div>
+            </div>
+            
+            <div class="rc-row"><span class="rc-label">CANDIDATE:</span><span class="rc-val">TRADER DIAMOND</span></div>
+            <div class="rc-row"><span class="rc-label">DATE:</span><span class="rc-val" id="rc-date">--</span></div>
+            <div class="rc-row"><span class="rc-label">ASSET:</span><span class="rc-val" id="rc-asset">--</span></div>
+            <div class="rc-row"><span class="rc-label">SESSION:</span><span class="rc-val">LIVE MARKET</span></div>
+
+            <div style="margin-top: 20px; font-size: 0.8rem; font-weight: bold; text-decoration: underline;">PERFORMANCE METRICS:</div>
+            <div class="rc-row"><span class="rc-label">ENTRY DISCIPLINE:</span><span class="rc-val">50 / 50</span></div>
+            <div class="rc-row"><span class="rc-label">RISK MANAGEMENT:</span><span class="rc-val">PASSED</span></div>
+            <div class="rc-row"><span class="rc-label">EXIT EXECUTION:</span><span class="rc-val" id="rc-exit-score">0 / 50</span></div>
+
+            <div class="rc-score-box">
+                <div>
+                    <div style="font-size:0.7rem; font-weight:bold;">TOTAL SCORE</div>
+                    <div id="rc-total-score" style="font-size:2rem; font-weight:bold;">100</div>
+                </div>
+                <div class="rc-grade" id="rc-grade">A+</div>
+            </div>
+
+            <div class="stamp" id="rc-stamp" style="color:red; border-color:red;">FAILED</div>
+
+            <div class="rc-footer">
+                <div style="font-size: 0.7rem;">Generated by Diamond_OS v10</div>
+                <div class="rc-sign">AUTHORIZED SIGNATURE</div>
+            </div>
+
+            <button onclick="document.getElementById('result-overlay').style.display='none'" style="position:absolute; bottom:-40px; left:50%; transform:translateX(-50%); background:black; color:white; border:1px solid white; padding:10px 30px; cursor:pointer; font-family:var(--font-mono);">CONTINUE</button>
+        </div>
+    </div>
+
+    <div id="exam-form-overlay" class="overlay" style="display: none; background: rgba(0,0,0,0.9);">
+        <div class="login-box" style="border-color: #fff; width: 400px; text-align: left;">
+            <h2 style="color: #fff; text-align: center; margin-bottom: 20px;">SUBMIT TRADE PAPER</h2>
+            <label style="font-size:0.7rem; color:var(--primary);">EXIT PRICE</label>
+            <input type="number" id="in-exit-price" class="cyber-input" placeholder="Price">
+            <div class="check-group" id="exit-checklist-container"></div>
+            <button class="btn-cyber" onclick="submitExam()">SUBMIT FOR GRADING</button>
+        </div>
+    </div>
+
+    <div id="interface">
+        <div id="top-bar" class="panel" style="grid-column: 1 / -1; flex-direction: row; align-items: center; padding: 0 20px;">
+            <div style="font-size: 1.5rem; font-weight: 800; color: #fff;">DIAMOND_<span style="color:var(--primary)">OS</span></div>
+            <div style="display: flex; gap: 10px;">
+                <select class="settings-select" onchange="changeTheme(this.value)">
+                    <option value="HACKER">THEME: HACKER</option>
+                    <option value="CYBER">THEME: CYBER</option>
+                    <option value="GOLD">THEME: GOLD</option>
+                    <option value="REAL">THEME: REAL</option>
+                </select>
+                <select class="settings-select" onchange="changeBg(this.value)">
+                    <option value="MATRIX">BG: MATRIX</option>
+                    <option value="NEURAL">BG: NEURAL</option>
+                    <option value="VOID">BG: VOID</option>
+                </select>
+                <button class="btn-cyber btn-small" style="border-color: #666; color: #ccc;" onclick="openRuleEditor()">⚙️ RULES</button>
+            </div>
+            <div style="display: flex; gap: 20px; font-family: var(--font-mono); font-size: 0.9rem;">
+                <span id="cloud-status" style="color: #666;">☁️ SYNCING...</span>
+                <span id="clock" style="color: var(--primary);">00:00:00</span>
+            </div>
+        </div>
+
+        <div class="panel" style="grid-row: 2;">
+            <div class="p-head"><span>STATUS</span><span class="blink" style="color:var(--secondary)">LIVE</span></div>
+            <div class="p-body">
+                <div id="radar-box"><div class="radar-sweep"></div><div class="radar-grid"></div></div>
+                <div style="border: 1px solid #333; padding: 10px; margin-bottom: 10px; background: rgba(0,0,0,0.3); text-align: center;">
+                    <div style="font-size: 0.7rem; color: #888;">REALIZED P&L</div>
+                    <div id="disp-pnl" style="font-size: 2rem; font-weight: bold; font-family: var(--font-mono); color: #fff;">₹0.00</div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                    <div style="background: rgba(255,255,255,0.05); padding: 8px;">
+                        <div style="font-size: 0.6rem; color: #888;">DAILY LIMIT</div>
+                        <div id="disp-risk-limit" style="color: var(--danger); font-weight: bold;">₹0</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.05); padding: 8px;">
+                        <div style="font-size: 0.6rem; color: #888;">TRADES LEFT</div>
+                        <div id="disp-trades-left" style="color: var(--primary); font-weight: bold;">0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" style="grid-row: 2; grid-column: 2;">
+            <div class="p-head"><span>TERMINAL</span></div>
+            <div class="p-body" style="padding: 0; display: flex; flex-direction: column;">
+                <div id="tv-chart" style="flex: 1; border-bottom: var(--border);"></div>
+                <div style="height: 320px; padding: 10px; display: flex; gap: 10px;">
+                    <div style="flex: 2; display: flex; flex-direction: column; gap: 5px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                            <input id="in-sym" class="cyber-input" placeholder="SYMBOL" style="text-transform: uppercase;">
+                            <select id="in-dir" class="cyber-input"><option value="LONG">▲ LONG</option><option value="SHORT">▼ SHORT</option></select>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 5px;">
+                            <input type="number" id="in-entry" class="cyber-input" placeholder="ENTRY" oninput="calcQty()">
+                            <input type="number" id="in-sl" class="cyber-input" placeholder="STOP LOSS" oninput="calcQty()">
+                            <input type="number" id="in-tgt" class="cyber-input" placeholder="TARGET">
+                        </div>
+                        <div style="background: rgba(255,255,255,0.05); padding: 10px; border: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+                            <div><span style="font-size:0.6rem; color:var(--secondary);">AUTO QTY</span><div id="out-qty-auto" style="font-size:1.5rem; font-weight:bold;">0</div></div>
+                            <input type="number" id="in-qty-manual" class="cyber-input" style="width: 80px; text-align:right;" placeholder="MANUAL">
+                        </div>
+                    </div>
+                    <div style="flex: 1; border-left: 1px solid #333; padding-left: 10px; display: flex; flex-direction: column;">
+                        <div style="font-size: 0.7rem; color: #888; margin-bottom: 5px;">ENTRY EXAM CHECK</div>
+                        <div class="check-group" id="entry-checklist-container"></div>
+                        <button class="btn-cyber" id="btn-exec" onclick="executeTrade()" style="margin-top:auto;">EXECUTE TRADE</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" style="grid-row: 2;">
+            <div class="p-head"><span>ACTIVE & HISTORY</span></div>
+            <div class="p-body">
+                <div id="active-trade-ui" style="display:none; padding:15px; background:rgba(0,255,0,0.05); border:1px solid var(--secondary); margin-bottom:15px;">
+                    <div style="color:var(--secondary); font-size:0.7rem;">ACTIVE PAPER</div>
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                        <span id="act-sym" style="font-weight:bold; font-size:1.1rem;">--</span>
+                        <span id="act-qty">--</span>
+                    </div>
+                    <button class="btn-cyber" style="border-color:var(--danger); color:var(--danger);" onclick="openExamForm()">CLOSE & SUBMIT</button>
+                </div>
+                <div id="trade-log-list" style="font-family:var(--font-mono); font-size:0.8rem;"></div>
+            </div>
+        </div>
+        
+        <div class="panel" style="grid-column: 1 / -1; padding: 5px 10px; flex-direction: row; align-items: center;">
+            <span style="color: var(--primary); font-size: 0.8rem; margin-right: 10px;">SYSTEM:</span>
+            <span id="sys-msg" style="color: #666; font-family: var(--font-mono); font-size: 0.8rem;">READY...</span>
+        </div>
+    </div>
+
+    <script>
+        // CONFIG
+        const firebaseConfig = { apiKey: "AIzaSyCLD87imksmqI2uENX4PVRDcnun3WxTdbk", authDomain: "mera-personal-data.firebaseapp.com", databaseURL: "https://mera-personal-data-default-rtdb.firebaseio.com", projectId: "mera-personal-data", storageBucket: "mera-personal-data.firebasestorage.app", messagingSenderId: "304579476606", appId: "1:304579476606:web:8fa78fee9cbe2f301f2c2f" };
+        let dbRef;
+        let appState = {
+            config: { capital: 50000, riskLimit: 1000, maxTrades: 3 },
+            tradesTaken: 0,
+            currentDailyLoss: 0,
+            consecutiveLosses: 0,
+            lastResetDate: "",
+            activeTrade: null,
+            history: [],
+            entryRules: ["Trend Aligned", "Key Level", "Risk Accepted"],
+            exitRules: ["Followed Target/SL", "Stayed Calm"]
+        };
+
+        const sfx = {
+            ctx: null,
+            init: () => { if(!sfx.ctx) sfx.ctx = new (window.AudioContext||window.webkitAudioContext)(); },
+            play: (f,t) => { if(!sfx.ctx) return; const o=sfx.ctx.createOscillator(),g=sfx.ctx.createGain(); o.frequency.value=f; o.type=t; o.connect(g); g.connect(sfx.ctx.destination); g.gain.exponentialRampToValueAtTime(0.001, sfx.ctx.currentTime+0.2); o.start(); o.stop(sfx.ctx.currentTime+0.2); },
+            good: () => { sfx.play(600,'sine'); setTimeout(()=>sfx.play(800,'sine'),100); },
+            bad: () => sfx.play(150,'sawtooth'),
+            lock: () => sfx.play(100,'square')
+        };
+
+        // --- THEME ENGINE ---
+        const THEMES = {
+            HACKER: { p: '#00ff41', s: '#008f11', d: '#ff0000', w: '#ebff00', bg: '#050505', g: 'rgba(5, 10, 5, 0.95)' },
+            CYBER: { p: '#00f3ff', s: '#0aff0a', d: '#ff2a2a', w: '#ffae00', bg: '#050505', g: 'rgba(12, 16, 20, 0.9)' },
+            GOLD: { p: '#d4af37', s: '#ffffff', d: '#ff4444', w: '#ffd700', bg: '#101010', g: 'rgba(20, 18, 10, 0.95)' },
+            REAL: { p: '#000', s: '#000', d: '#cc0000', w: '#ffaa00', bg: '#f0f0f0', g: 'rgba(255,255,255,0.9)' }
+        };
+        function changeTheme(t) {
+            const c = THEMES[t]; const r = document.documentElement.style;
+            r.setProperty('--primary', c.p); r.setProperty('--secondary', c.s);
+            r.setProperty('--danger', c.d); r.setProperty('--warning', c.w); r.setProperty('--bg-deep', c.bg); r.setProperty('--glass', c.g);
+            document.body.style.color = (t === 'REAL') ? '#000' : '#fff';
+            sfx.good();
+        }
+
+        // --- CANVAS (Matrix / Neural) ---
+        const cvs = document.getElementById('bg-canvas'), ctx = cvs.getContext('2d');
+        let bgMode = 'MATRIX', drops = [];
+        function initBg() {
+            cvs.width = window.innerWidth; cvs.height = window.innerHeight;
+            if(bgMode === 'MATRIX') {
+                const cols = Math.floor(cvs.width / 20);
+                drops = Array(cols).fill(1);
+            }
+        }
+        function draw() {
+            if(bgMode === 'MATRIX') {
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.05)'; ctx.fillRect(0, 0, cvs.width, cvs.height);
+                ctx.fillStyle = getComputedStyle(document.body).getPropertyValue('--primary');
+                ctx.font = '15px monospace';
+                drops.forEach((y, i) => {
+                    const text = String.fromCharCode(Math.random() * 128);
+                    ctx.fillText(text, i * 20, y * 20);
+                    if (y * 20 > cvs.height && Math.random() > 0.975) drops[i] = 0;
+                    drops[i]++;
+                });
+            } else if (bgMode === 'NEURAL') {
+                ctx.clearRect(0,0,cvs.width,cvs.height); ctx.fillStyle=getComputedStyle(document.body).getPropertyValue('--primary');
+                for(let i=0; i<50; i++) {
+                    const x = Math.sin(Date.now()/1000 + i)*cvs.width/2 + cvs.width/2;
+                    const y = Math.cos(Date.now()/1000 + i)*cvs.height/2 + cvs.height/2;
+                    ctx.fillRect(x,y,2,2);
+                }
+            } else { ctx.clearRect(0,0,cvs.width,cvs.height); }
+            requestAnimationFrame(draw);
+        }
+        initBg(); draw(); window.onresize = initBg;
+        function changeBg(m) { bgMode = m; initBg(); sfx.good(); }
+
+        // --- CORE SYSTEM ---
+        function attemptLogin() {
+            sfx.init();
+            if(document.getElementById('login-pin').value === '1234') {
+                sfx.good(); document.getElementById('login-overlay').style.display='none'; document.getElementById('setup-overlay').style.display='flex'; initFirebase();
+            } else { sfx.bad(); document.getElementById('login-msg').innerText="INVALID"; }
+        }
+
+        function confirmSetup() {
+            sfx.good();
+            appState.config.capital = parseFloat(document.getElementById('set-cap').value);
+            appState.config.riskLimit = parseFloat(document.getElementById('set-risk').value);
+            appState.config.maxTrades = parseInt(document.getElementById('set-trades').value);
+            document.getElementById('setup-overlay').style.display='none';
+            document.getElementById('interface').classList.add('active');
+            new TradingView.widget({ "autosize": true, "symbol": "NSE:NIFTY", "interval": "5", "timezone": "Asia/Kolkata", "theme": "dark", "style": "1", "locale": "in", "toolbar_bg": "#f1f3f6", "enable_publishing": false, "allow_symbol_change": true, "container_id": "tv-chart" });
+            updateUI(); saveData();
+        }
+
+        function initFirebase() {
+            try {
+                if(!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+                dbRef = firebase.database().ref('diamond_os_v10_final');
+                dbRef.once('value', s => { 
+                    if(s.val()) { 
+                        appState = { ...appState, ...s.val() }; 
+                        checkDailyReset(); checkLock(); updateUI(); 
+                    } 
+                });
+                document.getElementById('cloud-status').innerText = "☁️ ONLINE";
+                document.getElementById('cloud-status').style.color = "#00ff41";
+                setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString(); checkDailyReset(); }, 1000);
+            } catch(e) {}
+        }
+        function saveData() { if(dbRef) dbRef.set(appState); }
+
+        function checkDailyReset() {
+            const today = new Date().toLocaleDateString();
+            if(appState.lastResetDate !== today) {
+                appState.tradesTaken = 0; appState.currentDailyLoss = 0; appState.consecutiveLosses = 0; appState.lastResetDate = today;
+                document.getElementById('lockdown-overlay').style.display = 'none'; saveData(); updateUI();
+            }
+        }
+
+        // --- RULES ---
+        function openRuleEditor() { document.getElementById('rule-editor-overlay').style.display='flex'; renderRuleEditorList(); }
+        function closeRuleEditor() { document.getElementById('rule-editor-overlay').style.display='none'; updateUI(); }
+        
+        function renderRuleEditorList() {
+            const el = document.getElementById('entry-rule-list'); el.innerHTML='';
+            appState.entryRules.forEach((r,i)=> el.innerHTML += `<div class="rule-list-item"><span>${r}</span><span class="rule-del" onclick="deleteRule('entry',${i})">DEL</span></div>`);
+            const xl = document.getElementById('exit-rule-list'); xl.innerHTML='';
+            appState.exitRules.forEach((r,i)=> xl.innerHTML += `<div class="rule-list-item"><span>${r}</span><span class="rule-del" onclick="deleteRule('exit',${i})">DEL</span></div>`);
+        }
+        function addNewRule(type) {
+            const val = document.getElementById(type==='entry'?'new-entry-rule':'new-exit-rule').value;
+            if(val) { if(type==='entry') appState.entryRules.push(val); else appState.exitRules.push(val); saveData(); renderRuleEditorList(); sfx.good(); }
+        }
+        function deleteRule(type, i) { if(type==='entry') appState.entryRules.splice(i,1); else appState.exitRules.splice(i,1); saveData(); renderRuleEditorList(); }
+
+        // --- TRADE ---
+        function calcQty() {
+            const ent=parseFloat(document.getElementById('in-entry').value), sl=parseFloat(document.getElementById('in-sl').value);
+            if(ent && sl) {
+                const risk = appState.config.capital * 0.01;
+                const diff = Math.abs(ent - sl);
+                if(diff > 0) document.getElementById('out-qty-auto').innerText = Math.floor(risk/diff);
+            }
+        }
+
+        function executeTrade() {
+            checkLock();
+            if(document.getElementById('lockdown-overlay').style.display === 'flex') return;
+            if(appState.activeTrade) { alert("Close active first"); return; }
+            if(document.querySelectorAll('.entry-rule-chk:checked').length < appState.entryRules.length) { sfx.bad(); alert("Complete Checklist"); return; }
+
+            const sym = document.getElementById('in-sym').value.toUpperCase();
+            const ent = parseFloat(document.getElementById('in-entry').value);
+            const sl = parseFloat(document.getElementById('in-sl').value);
+            const mQty = parseInt(document.getElementById('in-qty-manual').value);
+            const aQty = parseInt(document.getElementById('out-qty-auto').innerText);
+            const qty = mQty > 0 ? mQty : aQty;
+
+            if(!sym || !ent || !sl || qty <= 0) { sfx.bad(); return; }
+
+            const risk = Math.abs(ent - sl) * qty;
+            if(appState.currentDailyLoss + risk > appState.config.riskLimit) { sfx.bad(); alert("RISK BLOCK"); return; }
+
+            sfx.good();
+            appState.activeTrade = { id: Date.now(), sym, dir: document.getElementById('in-dir').value, entry: ent, sl: sl, qty: qty };
+            saveData(); updateUI();
+        }
+
+        function openExamForm() {
+            sfx.good();
+            const c = document.getElementById('exit-checklist-container'); c.innerHTML='';
+            appState.exitRules.forEach(r => c.innerHTML += `<label class="chk-item"><input type="checkbox" class="exit-rule-chk"> ${r}</label>`);
+            document.getElementById('exam-form-overlay').style.display = 'flex';
+        }
+
+        function submitExam() {
+            const exitPx = parseFloat(document.getElementById('in-exit-price').value);
+            if(!exitPx) { sfx.bad(); return; }
+
+            const t = appState.activeTrade;
+            let pnl = 0;
+            if(t.dir === 'LONG') pnl = (exitPx - t.entry) * t.qty; else pnl = (t.entry - exitPx) * t.qty;
+
+            // Score
+            let entryScore = 50; 
+            const checked = document.querySelectorAll('.exit-rule-chk:checked').length;
+            const total = appState.exitRules.length;
+            let exitScore = total > 0 ? Math.round((checked/total)*50) : 50;
+            let finalScore = entryScore + exitScore;
+            
+            let verdict = finalScore >= 90 ? 'PASSED' : 'FAILED';
+            
+            // FILL REPORT CARD
+            document.getElementById('rc-date').innerText = new Date().toLocaleString();
+            document.getElementById('rc-asset').innerText = t.sym + " (" + t.dir + ")";
+            document.getElementById('rc-exit-score').innerText = exitScore + " / 50";
+            document.getElementById('rc-total-score').innerText = finalScore;
+            document.getElementById('rc-grade').innerText = finalScore >= 90 ? "A+" : (finalScore >= 70 ? "B" : "F");
+            const stamp = document.getElementById('rc-stamp');
+            stamp.innerText = verdict;
+            stamp.style.color = verdict === 'PASSED' ? 'green' : 'red';
+            stamp.style.borderColor = verdict === 'PASSED' ? 'green' : 'red';
+            
+            document.getElementById('exam-form-overlay').style.display='none';
+            document.getElementById('result-overlay').style.display='flex';
+            if(verdict==='PASSED') sfx.good(); else sfx.bad();
+
+            t.pnl = pnl; t.score = finalScore; t.verdict = verdict;
+            appState.history.push(t);
+            appState.activeTrade = null;
+            appState.tradesTaken++;
+
+            if(pnl < 0) {
+                appState.consecutiveLosses++;
+                appState.currentDailyLoss += Math.abs(pnl);
+            } else {
+                appState.consecutiveLosses = 0;
+            }
+
+            saveData(); updateUI(); checkLock();
+            document.getElementById('in-exit-price').value = '';
+        }
+
+        function checkLock() {
+            let r = "";
+            if(appState.consecutiveLosses >= 2) r = "2 CONSECUTIVE LOSSES";
+            if(appState.tradesTaken >= appState.config.maxTrades) r = "MAX TRADES REACHED";
+            if(appState.currentDailyLoss >= appState.config.riskLimit) r = "DAILY LOSS LIMIT HIT";
+            
+            if(r) {
+                document.getElementById('lockdown-overlay').style.display='flex';
+                document.getElementById('lock-reason').innerText = r;
+                sfx.lock();
+            }
+        }
+
+        function updateUI() {
+            const net = appState.history.reduce((a,b)=>a+b.pnl,0);
+            document.getElementById('disp-pnl').innerText = "₹" + net.toFixed(2);
+            document.getElementById('disp-pnl').style.color = net >= 0 ? "var(--secondary)" : "var(--danger)";
+            document.getElementById('disp-risk-limit').innerText = "₹" + appState.config.riskLimit;
+            document.getElementById('disp-trades-left').innerText = Math.max(0, appState.config.maxTrades - appState.tradesTaken);
+
+            const c = document.getElementById('entry-checklist-container');
+            if(c) {
+                c.innerHTML = '';
+                appState.entryRules.forEach(r => c.innerHTML += `<label class="chk-item"><input type="checkbox" class="entry-rule-chk disc-chk"> ${r}</label>`);
+            }
+
+            if(appState.activeTrade) {
+                document.getElementById('active-trade-ui').style.display='block';
+                document.getElementById('act-sym').innerText = appState.activeTrade.sym;
+                document.getElementById('act-qty').innerText = appState.activeTrade.qty;
+                document.getElementById('btn-exec').disabled = true;
+                document.getElementById('btn-exec').innerText = "TRADE ACTIVE";
+            } else {
+                document.getElementById('active-trade-ui').style.display='none';
+                document.getElementById('btn-exec').disabled = false;
+                document.getElementById('btn-exec').innerText = "EXECUTE TRADE";
+            }
+
+            const l = document.getElementById('trade-log-list');
+            l.innerHTML = '';
+            appState.history.slice().reverse().forEach(t => {
+                const col = t.pnl >= 0 ? 'var(--secondary)' : 'var(--danger)';
+                const initRisk = Math.abs(t.entry - t.sl) * t.qty;
+                const rr = initRisk > 0 ? (Math.abs(t.pnl)/initRisk).toFixed(1) : '0';
+                l.innerHTML += `
+                    <div style="border-bottom:1px solid #333; padding:8px; display:flex; justify-content:space-between; align-items:center;">
+                        <div>
+                            <div>${t.sym} (${t.dir})</div>
+                            <div style="font-size:0.6rem; color:#888;">Score: ${t.score} | RR: 1:${rr}</div>
+                        </div>
+                        <span style="color:${col}">₹${t.pnl.toFixed(2)}</span>
+                    </div>`;
+            });
+        }
+    </script>
+</body>
+</html>
