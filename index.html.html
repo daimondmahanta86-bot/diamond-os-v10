@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DIAMOND_OS | VERDICT_V16</title>
+    
+    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Rajdhani:wght@500;600;700;800&family=Cinzel:wght@400;700&family=Courier+Prime:wght@400;700&display=swap" rel="stylesheet">
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+
+    <style>
+        :root {
+            --primary: #00ff41; --secondary: #008F11; --danger: #ff0000; --warning: #f2ff00;
+            --bg-deep: #050505; --glass: rgba(5, 10, 5, 0.95); --border: 1px solid rgba(0, 255, 65, 0.3);
+            --font-head: 'Rajdhani', sans-serif; --font-mono: 'Share Tech Mono', monospace;
+            --font-paper: 'Cinzel', serif; /* For Certificate Title */
+            --font-typewriter: 'Courier Prime', monospace; /* For Certificate Text */
+        }
+
+        body { background-color: var(--bg-deep); color: #fff; font-family: var(--font-head); height: 100vh; overflow: hidden; margin: 0; }
+        #bg-canvas { position: absolute; top:0; left:0; width:100%; height:100%; z-index: -1; opacity: 0.15; }
+        * { box-sizing: border-box; user-select: none; outline: none; }
+
+        /* LAYOUT */
+        #interface {
+            display: grid; grid-template-columns: 300px 1fr 320px; grid-template-rows: 60px 1fr 35px;
+            gap: 8px; padding: 8px; height: 100vh; width: 100vw;
+            filter: blur(10px); transition: 0.5s; pointer-events: none;
+        }
+        #interface.active { filter: blur(0); pointer-events: all; }
+
+        .panel { background: var(--glass); border: var(--border); border-radius: 4px; display: flex; flex-direction: column; position: relative; overflow: hidden; backdrop-filter: blur(5px); box-shadow: 0 0 20px rgba(0,0,0,0.5); }
+        .p-head { background: rgba(255, 255, 255, 0.05); padding: 8px 12px; font-family: var(--font-mono); font-size: 0.8rem; border-bottom: var(--border); display: flex; justify-content: space-between; color: var(--primary); letter-spacing: 2px; }
+        .p-body { flex: 1; overflow-y: auto; padding: 15px; }
+
+        /* INPUTS & BUTTONS */
+        .cyber-input, select { background: #000; border: 1px solid #333; color: #fff; padding: 10px; font-family: var(--font-mono); width: 100%; margin-bottom: 10px; transition: 0.3s; }
+        .cyber-input:focus { border-color: var(--primary); box-shadow: 0 0 10px var(--primary) inset; }
+        
+        .btn-cyber { background: rgba(0, 255, 65, 0.1); border: 1px solid var(--primary); color: var(--primary); padding: 12px; width: 100%; cursor: pointer; font-family: var(--font-mono); font-weight: bold; text-transform: uppercase; letter-spacing: 1px; transition: 0.2s; }
+        .btn-cyber:hover { background: var(--primary); color: #000; box-shadow: 0 0 20px var(--primary); }
+        .btn-cyber:disabled { border-color: #333; color: #555; background: transparent; cursor: not-allowed; box-shadow: none; }
+        .btn-small { padding: 4px 8px; font-size: 0.7rem; width: auto; display: inline-block; }
+
+        /* OVERLAYS */
+        .overlay { position: fixed; inset: 0; background: #000; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+        .login-box { border: 2px solid var(--primary); padding: 40px; width: 90%; max-width: 400px; text-align: center; background: #0a0a0a; box-shadow: 0 0 50px rgba(0, 255, 0, 0.2); }
+        .lock-box { border: 2px solid var(--danger); box-shadow: 0 0 50px var(--danger); }
+
+        /* --- REAL CERTIFICATE CSS --- */
+        .certificate {
+            background: #fdfbf7; color: #1a1a1a; width: 650px; max-width: 95%;
+            padding: 40px; border: 2px solid #333; 
+            outline: 5px double #b8860b; /* Gold Outline */
+            outline-offset: -15px;
+            font-family: var(--font-paper); position: relative;
+            box-shadow: 0 0 100px rgba(255,255,255,0.1);
+            text-align: center;
+            background-image: url('https://www.transparenttextures.com/patterns/cream-paper.png');
+        }
+        .cert-header { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
+        .cert-title { font-family: var(--font-paper); font-weight: 700; font-size: 2.5rem; letter-spacing: 2px; text-transform: uppercase; margin: 0; color: #000; }
+        .cert-sub { font-size: 0.8rem; letter-spacing: 5px; text-transform: uppercase; color: #555; margin-top: 5px; font-family: sans-serif; }
+        
+        .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; font-family: var(--font-typewriter); font-size: 0.9rem; text-align: left; }
+        .info-item span { font-weight: bold; }
+        
+        .marks-table { width: 100%; border-collapse: collapse; margin: 20px 0; font-family: var(--font-typewriter); font-size: 0.9rem; border: 1px solid #000; }
+        .marks-table th { text-align: left; border-bottom: 1px solid #000; padding: 8px; background: #eee; font-weight: bold; }
+        .marks-table td { padding: 8px; border-bottom: 1px dashed #999; }
+        .marks-table td:last-child { text-align: right; font-weight: bold; }
+        
+        .result-box { 
+            display: flex; justify-content: space-between; align-items: center; 
+            border: 2px solid #000; padding: 15px; margin-top: 20px; background: #f0f0f0; 
+        }
+        .pnl-display { font-size: 1.5rem; font-weight: bold; font-family: var(--font-mono); }
+        .grade-display { font-size: 3rem; font-weight: 900; line-height: 1; font-family: serif; }
+        
+        .watermark {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-30deg);
+            font-size: 8rem; font-weight: 900; color: rgba(0,0,0,0.05); pointer-events: none; z-index: 0;
+            white-space: nowrap; font-family: sans-serif;
+        }
+
+        .stamp {
+            position: absolute; bottom: 80px; right: 40px;
+            border: 6px solid; padding: 10px 20px;
+            font-family: sans-serif; font-weight: 900; font-size: 2.5rem;
+            transform: rotate(-15deg); opacity: 0; 
+            animation: stampAnim 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards 0.5s;
+            mix-blend-mode: multiply; z-index: 2;
+        }
+        @keyframes stampAnim { 0% { transform: scale(3) rotate(-15deg); opacity:0; } 100% { transform: scale(1) rotate(-15deg); opacity:0.8; } }
+        
+        .pass { color: #006400; border-color: #006400; }
+        .fail { color: #8b0000; border-color: #8b0000; }
+        .terminated { color: #000; border-color: #000; background: rgba(255,0,0,0.1); }
+        
+        .cert-footer { display: flex; justify-content: space-between; margin-top: 40px; align-items: flex-end; font-size: 0.7rem; font-family: sans-serif; }
+        .sign-line { border-top: 2px solid #000; width: 180px; text-align: center; padding-top: 5px; font-weight: bold; }
+
+        /* RADAR & CHECKLIST */
+        #radar-box { width: 100%; height: 180px; position: relative; margin-bottom: 15px; border: 1px solid #333; border-radius: 50%; overflow: hidden; background: #000; }
+        .radar-sweep { position: absolute; inset: 0; background: conic-gradient(from 0deg, transparent 0deg, var(--primary) 60deg, transparent 60deg); opacity: 0.3; border-radius: 50%; animation: spin 2s linear infinite; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        .check-group { background: rgba(255,255,255,0.02); padding: 10px; border: 1px solid #333; margin-bottom: 10px; max-height: 150px; overflow-y: auto; }
+        .chk-item { display: flex; align-items: center; gap: 10px; font-size: 0.8rem; color: #888; cursor: pointer; margin-bottom: 5px; }
+        .chk-item:hover { color: var(--primary); }
+        .rule-list-item { display: flex; justify-content: space-between; align-items: center; background: rgba(255,255,255,0.05); padding: 5px 10px; margin-bottom: 5px; font-family: var(--font-mono); font-size: 0.8rem; }
+        .rule-del { color: var(--danger); cursor: pointer; font-weight: bold; }
+
+        @media (max-width: 768px) {
+            #interface { display: flex; flex-direction: column; overflow-y: auto; height: auto; min-height: 100vh; }
+            .panel { min-height: 350px; margin-bottom: 10px; }
+            #tv-chart { height: 400px; }
+            .certificate { padding: 15px; width: 100%; border-width: 5px; outline: none; }
+        }
+    </style>
+</head>
+<body>
+    <canvas id="bg-canvas"></canvas>
+
+    <div id="login-overlay" class="overlay">
+        <div class="login-box">
+            <h1 style="font-size: 3rem; margin: 0; color: #fff; letter-spacing: 5px;">DIAMOND</h1>
+            <p style="color: var(--primary); font-family: var(--font-mono); margin-bottom: 30px;">CAREER ACCESS</p>
+            <input type="password" id="login-pin" class="cyber-input" placeholder="PIN (1234)" style="text-align: center; font-size: 1.5rem; letter-spacing: 5px;" maxlength="4">
+            <button class="btn-cyber" onclick="attemptLogin()">INITIALIZE SYSTEM</button>
+            <p id="login-msg" style="color: var(--danger); height: 20px; font-size: 0.8rem; margin-top: 10px;"></p>
+        </div>
+    </div>
+
+    <div id="setup-overlay" class="overlay" style="display: none; background: rgba(0,0,0,0.98);">
+        <div class="login-box" style="border-color: var(--warning);">
+            <h2 style="color: var(--warning); margin-bottom: 20px;">MISSION PARAMETERS</h2>
+            <div style="text-align: left;">
+                <label style="font-size:0.7rem; color:var(--primary);">ACCOUNT CAPITAL</label>
+                <input type="number" id="set-cap" class="cyber-input" value="50000">
+                <label style="font-size:0.7rem; color:var(--danger);">MAX DAILY RISK</label>
+                <input type="number" id="set-risk" class="cyber-input" value="1000">
+                <label style="font-size:0.7rem; color:var(--warning);">MAX TRADES</label>
+                <input type="number" id="set-trades" class="cyber-input" value="3">
+            </div>
+            <button class="btn-cyber" onclick="confirmSetup()">LOCK & LOAD</button>
+        </div>
+    </div>
+
+    <div id="rule-editor-overlay" class="overlay" style="display: none; background: rgba(0,0,0,0.95);">
+        <div class="login-box" style="width: 600px; max-width: 95%; text-align: left; border-color: var(--secondary);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                <h2 style="color: var(--secondary); margin:0;">RULE ARCHITECT</h2>
+                <button onclick="closeRuleEditor()" style="background:transparent; border:none; color:#666; cursor:pointer;">[CLOSE]</button>
+            </div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                <div>
+                    <h3 style="color: var(--primary); font-size: 0.8rem; border-bottom: 1px solid var(--primary); margin-bottom: 10px;">ENTRY RULES</h3>
+                    <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                        <input type="text" id="new-entry-rule" class="cyber-input" placeholder="New Rule" style="margin:0;">
+                        <button class="btn-cyber btn-small" onclick="addNewRule('entry')">+</button>
+                    </div>
+                    <div id="entry-rule-list" style="height: 200px; overflow-y: auto;"></div>
+                </div>
+                <div>
+                    <h3 style="color: var(--warning); font-size: 0.8rem; border-bottom: 1px solid var(--warning); margin-bottom: 10px;">EXIT/EXAM RULES</h3>
+                    <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+                        <input type="text" id="new-exit-rule" class="cyber-input" placeholder="New Rule" style="margin:0;">
+                        <button class="btn-cyber btn-small" onclick="addNewRule('exit')">+</button>
+                    </div>
+                    <div id="exit-rule-list" style="height: 200px; overflow-y: auto;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="lockdown-overlay" class="overlay" style="display: none;">
+        <div class="login-box lock-box">
+            <h1 style="color: var(--danger); font-size: 4rem;">LOCKED</h1>
+            <p style="color: #fff;">PROTOCOL VIOLATION</p>
+            <div id="lock-reason" style="margin: 20px 0; color: var(--warning); border: 1px solid var(--warning); padding: 10px; font-family: var(--font-mono);">
+                REASON: 2 BACK-TO-BACK LOSSES
+            </div>
+            <p style="color: #888; font-size: 0.8rem;">SYSTEM AUTO-RESETS AT MIDNIGHT (00:00).</p>
+        </div>
+    </div>
+
+    <div id="exam-form-overlay" class="overlay" style="display: none; background: rgba(0,0,0,0.9);">
+        <div class="login-box" style="border-color: #fff; width: 500px; text-align: left;">
+            <h2 style="color: #fff; text-align: center; margin-bottom: 20px;">TRADE DEBRIEF</h2>
+            <label style="font-size:0.7rem; color:var(--primary);">EXIT PRICE</label>
+            <input type="number" id="in-exit-price" class="cyber-input" placeholder="Price">
+            
+            <div style="font-size:0.7rem; color:#888; margin-top:10px;">EXIT & PSYCHOLOGY CHECK</div>
+            <div class="check-group" id="exit-checklist-container"></div>
+            
+            <div class="bg-gray-900 p-2 border border-gray-700 mb-4">
+                <label class="chk-item"><input type="checkbox" id="std-setup"> 1. Setup Quality (A+ Setup?)</label>
+                <label class="chk-item"><input type="checkbox" id="std-entry"> 2. Entry Precision (No FOMO?)</label>
+                <label class="chk-item"><input type="checkbox" id="std-mind"> 5. Psychology (Calm Execution?)</label>
+            </div>
+
+            <button class="btn-cyber" onclick="submitExam()">GENERATE CERTIFICATE</button>
+        </div>
+    </div>
+
+    <div id="result-overlay" class="overlay" style="display: none;">
+        <div class="certificate">
+            <div class="watermark">OFFICIAL COPY</div>
+            <div class="cert-header">
+                <div class="cert-title">CERTIFICATE OF PERFORMANCE</div>
+                <div class="cert-sub">DIAMOND TRADING AUTHORITY</div>
+            </div>
+            
+            <div class="info-grid">
+                <div class="info-item">CANDIDATE: <span>COMMANDER</span></div>
+                <div class="info-item">ASSET: <span id="rc-asset">--</span></div>
+                <div class="info-item">DATE: <span id="rc-date">--</span></div>
+                <div class="info-item">ID: <span id="cert-id">--</span></div>
+            </div>
+
+            <table class="marks-table">
+                <thead><tr><th>SUBJECT</th><th>MARKS</th><th>GRADE</th></tr></thead>
+                <tbody>
+                    <tr><td>TECHNICAL SETUP (Structure)</td><td>20</td><td id="m-setup">--</td></tr>
+                    <tr><td>ENTRY PRECISION (Execution)</td><td>20</td><td id="m-entry">--</td></tr>
+                    <tr><td>RISK PROTOCOL (System Auto)</td><td>20</td><td id="m-risk">20</td></tr>
+                    <tr><td>EXIT DISCIPLINE (Targets/SL)</td><td>20</td><td id="m-exit">--</td></tr>
+                    <tr><td>TRADING PSYCHOLOGY (Mind)</td><td>20</td><td id="m-psych">--</td></tr>
+                </tbody>
+            </table>
+
+            <div class="result-box">
+                <div style="text-align:left;">
+                    <div style="font-size:0.7rem; text-transform:uppercase; color:#666;">FINANCIAL RESULT</div>
+                    <div class="pnl-display" id="rc-pnl">--</div>
+                    <div style="font-size:0.7rem; color:#666; margin-top:5px;">SCORE: <span id="rc-total-score">0</span>/100</div>
+                </div>
+                <div style="text-align:right;">
+                     <div style="font-size:0.7rem; text-transform:uppercase; color:#666;">PROFICIENCY GRADE</div>
+                     <div class="grade-display" id="rc-grade">F</div>
+                </div>
+            </div>
+
+            <div class="stamp" id="rc-stamp">FAILED</div>
+
+            <div class="cert-footer">
+                <div style="text-align:left;">
+                     VALIDATED BY:<br>
+                     <b>DIAMOND_OS V16</b>
+                </div>
+                <div class="sign-line">CHIEF ARCHITECT</div>
+            </div>
+
+            <button class="btn-cyber" style="position:absolute; bottom:-60px; left:50%; transform:translateX(-50%); width:200px; background:#000; border:1px solid #fff; color:#fff;" onclick="closeResult()">FILE & CONTINUE</button>
+        </div>
+    </div>
+
+    <div id="interface">
+        <div class="panel" style="grid-column: 1 / -1; flex-direction: row; align-items: center; padding: 0 20px;">
+            <div style="font-size: 1.5rem; font-weight: 800; color: #fff;">DIAMOND_<span style="color:var(--primary)">OS</span></div>
+            <div style="display: flex; gap: 10px; margin-left: auto;">
+                <button class="btn-cyber btn-small" style="border-color: #fff; color: #fff;" onclick="openRuleEditor()">⚙️ RULES</button>
+                <div style="font-family: var(--font-mono); font-size: 0.9rem; color: #666; display:flex; align-items:center; gap:10px;">
+                    <span id="cloud-status">☁️ LINKING...</span>
+                    <span id="clock" style="color: var(--primary);">00:00:00</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" style="grid-row: 2;">
+            <div class="p-head"><span>PILOT STATUS</span><span style="color:var(--secondary)">LIVE</span></div>
+            <div class="p-body">
+                <div id="radar-box"><div class="radar-sweep"></div></div>
+                <div style="border: 1px solid #333; padding: 10px; margin-bottom: 10px; background: rgba(0,0,0,0.3); text-align: center;">
+                    <div style="font-size: 0.7rem; color: #888;">REALIZED P&L</div>
+                    <div id="disp-pnl" style="font-size: 2rem; font-weight: bold; font-family: var(--font-mono);">₹0.00</div>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;">
+                    <div style="background: rgba(255,255,255,0.05); padding: 10px; text-align: center;">
+                        <div style="font-size: 0.6rem; color: #888;">DAILY LIMIT</div>
+                        <div id="disp-risk-limit" style="color: var(--danger); font-weight: bold;">₹0</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.05); padding: 10px; text-align: center;">
+                        <div style="font-size: 0.6rem; color: #888;">TRADES LEFT</div>
+                        <div id="disp-trades-left" style="color: var(--primary); font-weight: bold;">0</div>
+                    </div>
+                </div>
+                <div style="margin-top: 15px; font-size: 0.7rem; color: #666; text-align: center;">
+                    CURRENT LOSS: <span id="disp-loss-current" style="color: var(--danger);">₹0</span>
+                </div>
+                <div style="margin-top: 5px; display:flex; justify-content:center; gap:5px;">
+                     <div id="loss-dot-1" style="width:10px; height:10px; border-radius:50%; border:1px solid #444;"></div>
+                     <div id="loss-dot-2" style="width:10px; height:10px; border-radius:50%; border:1px solid #444;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" style="grid-row: 2; grid-column: 2;">
+            <div class="mode-switch" style="display:flex; border-bottom:var(--border);">
+                <button class="mode-btn active" onclick="switchCenter('CHART', this)" style="flex:1; padding:10px; background:transparent; color:#888;">LIVE CHART</button>
+                <button class="mode-btn" onclick="switchCenter('EXEC', this)" style="flex:1; padding:10px; background:transparent; color:#888;">EXECUTION</button>
+            </div>
+            <div class="p-body" style="padding: 0; display: flex; flex-direction: column;">
+                <div id="view-chart" style="flex: 1; min-height: 400px;">
+                    <div id="tv-chart" style="width: 100%; height: 100%;"></div>
+                </div>
+                <div id="view-exec" style="flex: 1; padding: 20px; display: none; overflow-y: auto;">
+                    <div style="max-width: 500px; margin: 0 auto;">
+                        <div style="display: flex; gap: 10px;">
+                            <input id="in-sym" class="cyber-input" placeholder="SYMBOL (NIFTY)" style="flex: 2; text-transform: uppercase;">
+                            <select id="in-dir" class="cyber-input" style="flex: 1;"><option value="LONG">▲ LONG</option><option value="SHORT">▼ SHORT</option></select>
+                        </div>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+                            <input type="number" id="in-entry" class="cyber-input" placeholder="ENTRY" oninput="calcQty()">
+                            <input type="number" id="in-sl" class="cyber-input" placeholder="STOP LOSS" oninput="calcQty()">
+                            <input type="number" id="in-tgt" class="cyber-input" placeholder="TARGET">
+                        </div>
+                        <div style="background: rgba(0,255,0,0.1); border: 1px solid var(--secondary); padding: 15px; margin-bottom: 20px; text-align: center;">
+                            <div style="font-size: 0.7rem; color: var(--secondary);">CALCULATED SAFE QTY (1% RISK)</div>
+                            <div id="out-qty-auto" style="font-size: 2.5rem; font-weight: bold; color: #fff;">0</div>
+                            <input type="number" id="in-qty-manual" class="cyber-input" style="width: 100px; margin: 10px auto 0; text-align: center;" placeholder="MANUAL QTY">
+                        </div>
+                        <div style="font-size:0.7rem; color:#888;">PRE-FLIGHT CHECKLIST (REQUIRED)</div>
+                        <div class="check-group" id="entry-checklist-container"></div>
+                        <button class="btn-cyber" onclick="executeTrade()">EXECUTE ORDER</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="panel" style="grid-row: 2;">
+            <div class="p-head"><span>LOGS</span></div>
+            <div class="p-body">
+                <div id="active-trade-ui" style="display:none; padding:15px; background:rgba(0,50,0,0.3); border:1px solid var(--secondary); margin-bottom:15px;">
+                    <div style="color:var(--secondary); font-size:0.7rem; display: flex; justify-content: space-between;">
+                        <span>ACTIVE POSITION</span><span>● LIVE</span>
+                    </div>
+                    <div style="font-size: 1.2rem; font-weight: bold; margin: 10px 0;">
+                        <span id="act-sym">--</span> <span id="act-qty" style="font-size:0.9rem; color:#aaa;">--</span>
+                    </div>
+                    <button class="btn-cyber" style="border-color:var(--danger); color:var(--danger);" onclick="openExamForm()">CLOSE POSITION</button>
+                </div>
+                <div id="trade-log-list" style="font-family:var(--font-mono); font-size:0.8rem;"></div>
+            </div>
+        </div>
+        
+        <div class="panel" style="grid-column: 1 / -1; padding: 5px 10px; flex-direction: row; align-items: center;">
+            <span style="color: var(--primary); font-size: 0.8rem; margin-right: 10px;">SYSTEM:</span>
+            <span id="sys-msg" style="color: #666; font-family: var(--font-mono); font-size: 0.8rem;">READY...</span>
+        </div>
+    </div>
+
+    <script>
+        const firebaseConfig = { apiKey: "AIzaSyCLD87imksmqI2uENX4PVRDcnun3WxTdbk", authDomain: "mera-personal-data.firebaseapp.com", databaseURL: "https://mera-personal-data-default-rtdb.firebaseio.com", projectId: "mera-personal-data", storageBucket: "mera-personal-data.firebasestorage.app", messagingSenderId: "304579476606", appId: "1:304579476606:web:8fa78fee9cbe2f301f2c2f" };
+        let dbRef;
+        let appState = {
+            config: { capital: 50000, riskLimit: 1000, maxTrades: 3 },
+            tradesTaken: 0, currentDailyLoss: 0, consecutiveLosses: 0, lastResetDate: "",
+            activeTrade: null, history: [],
+            entryRules: ["Trend Confirmed", "Key Level", "Risk Accepted"], // Default
+            exitRules: ["Followed Plan", "Trailing Stop Hit"] // Default
+        };
+
+        const sfx = {
+            ctx: null,
+            init: () => { if(!sfx.ctx) sfx.ctx = new (window.AudioContext||window.webkitAudioContext)(); },
+            play: (f,t) => { if(!sfx.ctx) return; const o=sfx.ctx.createOscillator(),g=sfx.ctx.createGain(); o.frequency.value=f; o.type=t; o.connect(g); g.connect(sfx.ctx.destination); g.gain.setValueAtTime(0.1, sfx.ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.001, sfx.ctx.currentTime+0.2); o.start(); o.stop(sfx.ctx.currentTime+0.2); },
+            good: () => sfx.play(800,'sine'),
+            bad: () => sfx.play(150,'sawtooth'),
+            lock: () => sfx.play(100,'square'),
+            stamp: () => { sfx.play(200,'square'); setTimeout(()=>sfx.play(100,'square'),100); }
+        };
+
+        // BG Canvas
+        const cvs=document.getElementById('bg-canvas'), ctx=cvs.getContext('2d'); cvs.width=window.innerWidth; cvs.height=window.innerHeight;
+        let drops=Array(Math.floor(cvs.width/20)).fill(1);
+        function draw(){ ctx.fillStyle='rgba(0,0,0,0.05)'; ctx.fillRect(0,0,cvs.width,cvs.height); ctx.fillStyle='#00ff41'; ctx.font='15px monospace'; drops.forEach((y,i)=>{ ctx.fillText(String.fromCharCode(Math.random()*128), i*20, y*20); if(y*20>cvs.height && Math.random()>0.975) drops[i]=0; drops[i]++; }); requestAnimationFrame(draw); }
+        draw();
+
+        function attemptLogin() { sfx.init(); if(document.getElementById('login-pin').value === '1234') { sfx.good(); document.getElementById('login-overlay').style.display='none'; document.getElementById('setup-overlay').style.display='flex'; initFirebase(); } else { sfx.bad(); document.getElementById('login-msg').innerText="INVALID PIN"; } }
+        function confirmSetup() { appState.config.capital = parseFloat(document.getElementById('set-cap').value); appState.config.riskLimit = parseFloat(document.getElementById('set-risk').value); appState.config.maxTrades = parseInt(document.getElementById('set-trades').value); document.getElementById('setup-overlay').style.display='none'; document.getElementById('interface').classList.add('active'); new TradingView.widget({ "autosize": true, "symbol": "NSE:NIFTY", "interval": "5", "timezone": "Asia/Kolkata", "theme": "dark", "style": "1", "locale": "in", "toolbar_bg": "#f1f3f6", "enable_publishing": false, "allow_symbol_change": true, "container_id": "tv-chart" }); updateUI(); saveData(); }
+        function initFirebase() { try { if(!firebase.apps.length) firebase.initializeApp(firebaseConfig); dbRef = firebase.database().ref('diamond_os_v16_final'); dbRef.once('value', s => { if(s.val()) { appState = { ...appState, ...s.val() }; checkDailyReset(); checkLock(); updateUI(); } }); document.getElementById('cloud-status').innerText = "☁️ ONLINE"; document.getElementById('cloud-status').style.color = "#00ff41"; setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString(); checkDailyReset(); }, 1000); } catch(e) {} }
+        function saveData() { if(dbRef) dbRef.set(appState); }
+        function switchCenter(view, btn) { document.getElementById('view-chart').style.display = view==='CHART'?'block':'none'; document.getElementById('view-exec').style.display = view==='EXEC'?'block':'none'; sfx.good(); }
+
+        function checkDailyReset() {
+            const today = new Date().toLocaleDateString();
+            if(appState.lastResetDate !== today) {
+                appState.tradesTaken = 0; appState.currentDailyLoss = 0; appState.consecutiveLosses = 0; appState.lastResetDate = today;
+                document.getElementById('lockdown-overlay').style.display = 'none'; saveData(); updateUI();
+            }
+        }
+
+        // --- RULE ARCHITECT ---
+        function openRuleEditor() { document.getElementById('rule-editor-overlay').style.display='flex'; renderRuleEditorList(); }
+        function closeRuleEditor() { document.getElementById('rule-editor-overlay').style.display='none'; updateUI(); }
+        function renderRuleEditorList() {
+            const el = document.getElementById('entry-rule-list'); el.innerHTML='';
+            appState.entryRules.forEach((r,i)=> el.innerHTML += `<div class="rule-list-item"><span>${r}</span><span class="rule-del" onclick="deleteRule('entry',${i})">DEL</span></div>`);
+            const xl = document.getElementById('exit-rule-list'); xl.innerHTML='';
+            appState.exitRules.forEach((r,i)=> xl.innerHTML += `<div class="rule-list-item"><span>${r}</span><span class="rule-del" onclick="deleteRule('exit',${i})">DEL</span></div>`);
+        }
+        function addNewRule(type) {
+            const val = document.getElementById(type==='entry'?'new-entry-rule':'new-exit-rule').value;
+            if(val) { if(type==='entry') appState.entryRules.push(val); else appState.exitRules.push(val); saveData(); renderRuleEditorList(); sfx.good(); }
+        }
+        function deleteRule(type, i) { if(type==='entry') appState.entryRules.splice(i,1); else appState.exitRules.splice(i,1); saveData(); renderRuleEditorList(); }
+
+        // --- TRADING ---
+        function calcQty() { const ent=parseFloat(document.getElementById('in-entry').value), sl=parseFloat(document.getElementById('in-sl').value); if(ent && sl) { const risk = appState.config.capital * 0.01; const diff = Math.abs(ent - sl); if(diff > 0) document.getElementById('out-qty-auto').innerText = Math.floor(risk/diff); } }
+        
+        function executeTrade() {
+            checkLock();
+            if(document.getElementById('lockdown-overlay').style.display === 'flex') return;
+            if(appState.activeTrade) { alert("Close active first"); return; }
+            if(document.querySelectorAll('.entry-rule-chk:checked').length < appState.entryRules.length) { sfx.bad(); alert("Complete Checklist"); return; }
+            const sym = document.getElementById('in-sym').value.toUpperCase();
+            const ent = parseFloat(document.getElementById('in-entry').value);
+            const sl = parseFloat(document.getElementById('in-sl').value);
+            const qty = parseInt(document.getElementById('in-qty-manual').value) || parseInt(document.getElementById('out-qty-auto').innerText);
+            if(!sym || !ent || !sl || qty <= 0) { sfx.bad(); return; }
+            const risk = Math.abs(ent - sl) * qty;
+            if(appState.currentDailyLoss + risk > appState.config.riskLimit) { sfx.bad(); alert("RISK BLOCK"); return; }
+            sfx.good();
+            appState.activeTrade = { id: Date.now(), sym, dir: document.getElementById('in-dir').value, entry: ent, sl: sl, qty: qty };
+            saveData(); updateUI();
+        }
+
+        function openExamForm() { 
+            sfx.good(); 
+            const c = document.getElementById('exit-checklist-container'); c.innerHTML='';
+            appState.exitRules.forEach(r => c.innerHTML += `<label class="chk-item"><input type="checkbox" class="exit-rule-chk"> ${r}</label>`);
+            document.getElementById('exam-form-overlay').style.display = 'flex'; 
+        }
+
+        function submitExam() {
+            const exitPx = parseFloat(document.getElementById('in-exit-price').value);
+            if(!exitPx) { sfx.bad(); return; }
+
+            const t = appState.activeTrade;
+            let pnl = (t.dir === 'LONG') ? (exitPx - t.entry) * t.qty : (t.entry - exitPx) * t.qty;
+
+            // --- GRADING SYSTEM ---
+            let s_setup = document.getElementById('std-setup').checked ? 20 : 0;
+            let s_entry = document.getElementById('std-entry').checked ? 20 : 0;
+            let s_risk = 20; // Auto
+            const exitChecks = document.querySelectorAll('.exit-rule-chk:checked').length;
+            const exitTotal = appState.exitRules.length;
+            let s_exit = exitTotal > 0 ? Math.round((exitChecks/exitTotal)*20) : 20;
+            let s_psych = document.getElementById('std-mind').checked ? 20 : 0;
+
+            let total = s_setup + s_entry + s_risk + s_exit + s_psych;
+            let verdict = total >= 80 ? 'PASSED' : 'FAILED';
+            let grade = total >= 90 ? 'A+' : (total >= 75 ? 'B' : (total >= 50 ? 'C' : 'F'));
+
+            // Fill Certificate
+            document.getElementById('rc-date').innerText = new Date().toLocaleDateString();
+            document.getElementById('rc-asset').innerText = t.sym + " (" + t.dir + ")";
+            document.getElementById('m-setup').innerText = s_setup + "/20";
+            document.getElementById('m-entry').innerText = s_entry + "/20";
+            document.getElementById('m-risk').innerText = s_risk + "/20";
+            document.getElementById('m-exit').innerText = s_exit + "/20";
+            document.getElementById('m-psych').innerText = s_psych + "/20";
+            document.getElementById('rc-total-score').innerText = total;
+            document.getElementById('rc-grade').innerText = grade;
+            document.getElementById('cert-id').innerText = "#" + Date.now().toString().slice(-6);
+            document.getElementById('rc-pnl').innerText = (pnl >= 0 ? "+" : "") + "₹" + pnl.toFixed(2);
+            document.getElementById('rc-pnl').style.color = pnl >= 0 ? "green" : "red";
+
+            const stamp = document.getElementById('rc-stamp');
+            stamp.innerText = verdict;
+            stamp.className = 'stamp ' + (verdict==='PASSED'?'pass':'fail');
+            
+            // Logic Triggers
+            if(appState.tradesTaken >= appState.config.maxTrades) stamp.innerText = "SESSION ENDED";
+            if(pnl < 0 && (appState.currentDailyLoss + Math.abs(pnl)) >= appState.config.riskLimit) stamp.innerText = "RISK BREACH";
+            if(appState.consecutiveLosses >= 1 && pnl < 0) stamp.innerText = "TERMINATED"; // Will be 2 losses
+
+            document.getElementById('exam-form-overlay').style.display='none';
+            document.getElementById('result-overlay').style.display='flex';
+            sfx.stamp();
+
+            t.pnl = pnl; t.score = total; t.grade = grade;
+            appState.history.push(t);
+            appState.activeTrade = null;
+            appState.tradesTaken++;
+            
+            if(pnl < 0) { 
+                appState.consecutiveLosses++; appState.currentDailyLoss += Math.abs(pnl); 
+            } else { 
+                appState.consecutiveLosses = 0; 
+            }
+            saveData(); updateUI(); checkLock();
+            document.getElementById('in-exit-price').value = '';
+        }
+
+        function checkLock() {
+            let r = "";
+            if(appState.consecutiveLosses >= 2) r = "2 CONSECUTIVE LOSSES";
+            if(appState.tradesTaken >= appState.config.maxTrades) r = "MAX TRADES REACHED";
+            if(appState.currentDailyLoss >= appState.config.riskLimit) r = "DAILY LOSS LIMIT HIT";
+            
+            if(r) {
+                document.getElementById('lockdown-overlay').style.display='flex';
+                document.getElementById('lock-reason').innerText = r;
+                sfx.lock();
+            }
+        }
+        
+        function closeResult() { document.getElementById('result-overlay').style.display='none'; }
+
+        function updateUI() {
+            const net = appState.history.reduce((a,b)=>a+b.pnl,0);
+            document.getElementById('disp-pnl').innerText = "₹" + net.toFixed(2);
+            document.getElementById('disp-pnl').style.color = net >= 0 ? "var(--secondary)" : "var(--danger)";
+            document.getElementById('disp-risk-limit').innerText = "₹" + appState.config.riskLimit;
+            document.getElementById('disp-loss-current').innerText = "₹" + appState.currentDailyLoss.toFixed(0);
+            document.getElementById('disp-trades-left').innerText = Math.max(0, appState.config.maxTrades - appState.tradesTaken);
+
+            // Populate Entry Checklist
+            const c = document.getElementById('entry-checklist-container');
+            if(c) {
+                c.innerHTML = '';
+                appState.entryRules.forEach(r => c.innerHTML += `<label class="chk-item"><input type="checkbox" class="entry-rule-chk disc-chk"> ${r}</label>`);
+            }
+
+            if(appState.activeTrade) {
+                document.getElementById('active-trade-ui').style.display='block';
+                document.getElementById('act-sym').innerText = appState.activeTrade.sym;
+                document.getElementById('act-qty').innerText = appState.activeTrade.qty;
+                document.getElementById('btn-exec').disabled = true;
+                document.getElementById('btn-exec').innerText = "ACTIVE";
+            } else {
+                document.getElementById('active-trade-ui').style.display='none';
+                document.getElementById('btn-exec').disabled = false;
+                document.getElementById('btn-exec').innerText = "EXECUTE";
+            }
+
+            const l = document.getElementById('trade-log-list'); l.innerHTML = '';
+            appState.history.slice().reverse().forEach(t => {
+                const col = t.pnl >= 0 ? 'var(--secondary)' : 'var(--danger)';
+                l.innerHTML += `<div style="border-bottom:1px solid #333; padding:8px; display:flex; justify-content:space-between;"><div><div>${t.sym}</div><div style="font-size:0.6rem; color:#888;">Grade: ${t.grade} (${t.score}%)</div></div><span style="color:${col}">₹${t.pnl.toFixed(2)}</span></div>`;
+            });
+            
+            // Lock Dots
+            document.getElementById('loss-dot-1').style.background = appState.consecutiveLosses >= 1 ? 'var(--danger)' : '#222';
+            document.getElementById('loss-dot-2').style.background = appState.consecutiveLosses >= 2 ? 'var(--danger)' : '#222';
+        }
+    </script>
+</body>
+</html>
